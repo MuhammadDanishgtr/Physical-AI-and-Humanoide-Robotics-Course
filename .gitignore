@@ -29,3 +29,5 @@ drizzle/migrations/
 
 # Cache
 .cache/
+
+.vercel

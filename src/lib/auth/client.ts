@@ -3,7 +3,10 @@
  * Communicates with Express API server for authentication
  */
 
-const API_URL = 'http://localhost:3001';
+// Use relative path for Vercel serverless functions, localhost for development
+const API_URL = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+  ? '' // Use relative path in production (Vercel)
+  : 'http://localhost:3001';
 const TOKEN_KEY = 'auth_token';
 const USER_KEY = 'auth_user';
 

@@ -8,8 +8,6 @@ import NavbarItem from '@theme/NavbarItem';
 import NavbarColorModeToggle from '@theme/Navbar/ColorModeToggle';
 import NavbarMobileSidebarToggle from '@theme/Navbar/MobileSidebar/Toggle';
 import NavbarLogo from '@theme/Navbar/Logo';
-import NavbarSearch from '@theme/Navbar/Search';
-import SearchBar from '@theme/SearchBar';
 import UserMenu from '../../../components/UserMenu';
 import styles from './styles.module.css';
 
@@ -56,8 +54,6 @@ export default function NavbarContent(): JSX.Element {
       !item.className?.includes('navbar-signup')
   );
 
-  const searchBarItem = items.find((item: any) => item.type === 'search');
-
   return (
     <NavbarContentLayout
       left={
@@ -71,11 +67,6 @@ export default function NavbarContent(): JSX.Element {
         <>
           <NavbarItems items={filteredRightItems} />
           <NavbarColorModeToggle className={styles.colorModeToggle} />
-          {!searchBarItem && (
-            <NavbarSearch>
-              <SearchBar />
-            </NavbarSearch>
-          )}
           <UserMenu />
         </>
       }
