@@ -34,8 +34,8 @@ const config: Config = {
         docs: {
           sidebarPath: './sidebars.ts',
           editUrl: 'https://github.com/robotics-course/physical-ai-robotics/tree/main/',
-          showLastUpdateTime: true,
-          showLastUpdateAuthor: true,
+          showLastUpdateTime: false,
+          showLastUpdateAuthor: false,
         },
         blog: false,
         theme: {
@@ -166,17 +166,18 @@ const config: Config = {
   plugins: [],
 
   themes: [
-    [
-      require.resolve('@easyops-cn/docusaurus-search-local'),
-      {
-        hashed: true,
-        language: ['en'],
-        highlightSearchTermsOnTargetPage: true,
-        explicitSearchResultPath: true,
-        docsRouteBasePath: '/docs',
-        indexBlog: false,
-      },
-    ],
+    // Temporarily disabled for build - search plugin causing issues
+    // [
+    //   require.resolve('@easyops-cn/docusaurus-search-local'),
+    //   {
+    //     hashed: true,
+    //     language: ['en'],
+    //     highlightSearchTermsOnTargetPage: true,
+    //     explicitSearchResultPath: true,
+    //     docsRouteBasePath: '/docs',
+    //     indexBlog: false,
+    //   },
+    // ],
   ],
 };
 
