@@ -1,15 +1,24 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { kv } from '@vercel/kv';
 
-// Simple in-memory store (for demo purposes - in production use a database)
-// Note: This will reset on each cold start in serverless
-const users: Map<string, { id: string; email: string; name: string; password: string }> = new Map();
-
-function generateId(): string {
-  return Math.random().toString(36).substring(2) + Date.now().toString(36);
+interface User {
+  id: string;
+  email: string;
+  name: string;
+  password: string;
+  createdAt: string;
 }
 
-function generateToken(): string {
-  return Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2);
+function generateId(): string {
+  return 'user_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
+}
+
+function generateToken(userId: string): string {
+  const payload = {
+    userId,
+    exp: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days
+  };
+  return Buffer.from(JSON.stringify(payload)).toString('base64');
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -33,22 +42,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'Email, password, and name are required' });
     }
 
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: 'Invalid email format' });
+    }
+
     // Check if user already exists
-    if (users.has(email)) {
-      return res.status(400).json({ error: 'User already exists' });
+    const existingUser = await kv.get<User>(`user:${email}`);
+    if (existingUser) {
+      return res.status(400).json({ error: 'User already exists with this email' });
     }
 
     // Create new user
-    const user = {
+    const user: User = {
       id: generateId(),
-      email,
+      email: email.toLowerCase(),
       name,
-      password, // In production, hash this!
+      password, // In production, hash this with bcrypt!
+      createdAt: new Date().toISOString(),
     };
 
-    users.set(email, user);
+    // Store user in KV
+    await kv.set(`user:${email.toLowerCase()}`, user);
 
-    const token = generateToken();
+    // Generate token
+    const token = generateToken(user.id);
+
+    // Store token -> user mapping for session validation
+    await kv.set(`token:${token}`, { userId: user.id, email: user.email }, { ex: 7 * 24 * 60 * 60 }); // 7 days expiry
 
     return res.status(200).json({
       token,
@@ -60,6 +82,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   } catch (error) {
     console.error('Signup error:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: 'Internal server error. Please try again.' });
   }
 }

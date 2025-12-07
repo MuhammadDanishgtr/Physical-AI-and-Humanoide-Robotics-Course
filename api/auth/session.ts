@@ -1,6 +1,19 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { kv } from '@vercel/kv';
 
-// In production, validate the token against a database or JWT
+interface User {
+  id: string;
+  email: string;
+  name: string;
+  password: string;
+  createdAt: string;
+}
+
+interface TokenData {
+  userId: string;
+  email: string;
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -25,16 +38,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const token = authHeader.split(' ')[1];
 
     if (!token) {
-      return res.status(401).json({ error: 'Invalid token' });
+      return res.status(401).json({ error: 'Invalid token format' });
     }
 
-    // In a real app, validate the token and look up the user
-    // For now, we'll trust the client-side stored user data
-    // The client should send user info in the request or we'd look it up in a DB
+    // Look up token
+    const tokenData = await kv.get<TokenData>(`token:${token}`);
+
+    if (!tokenData) {
+      return res.status(401).json({ error: 'Session expired or invalid' });
+    }
+
+    // Get user data
+    const user = await kv.get<User>(`user:${tokenData.email}`);
+
+    if (!user) {
+      return res.status(401).json({ error: 'User not found' });
+    }
 
     return res.status(200).json({
-      valid: true,
-      message: 'Session is valid',
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+      },
     });
   } catch (error) {
     console.error('Session error:', error);

@@ -1,18 +1,20 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { kv } from '@vercel/kv';
 
-// Simple in-memory store (shared across endpoints via edge config or database in production)
-const users: Map<string, { id: string; email: string; name: string; password: string }> = new Map();
+interface User {
+  id: string;
+  email: string;
+  name: string;
+  password: string;
+  createdAt: string;
+}
 
-// Add a demo user for testing
-users.set('demo@example.com', {
-  id: 'demo-user-1',
-  email: 'demo@example.com',
-  name: 'Demo User',
-  password: 'demo123',
-});
-
-function generateToken(): string {
-  return Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2);
+function generateToken(userId: string): string {
+  const payload = {
+    userId,
+    exp: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days
+  };
+  return Buffer.from(JSON.stringify(payload)).toString('base64');
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -36,13 +38,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
-    const user = users.get(email);
+    // Look up user
+    const user = await kv.get<User>(`user:${email.toLowerCase()}`);
 
-    if (!user || user.password !== password) {
+    if (!user) {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
-    const token = generateToken();
+    // Check password (in production, use bcrypt.compare)
+    if (user.password !== password) {
+      return res.status(401).json({ error: 'Invalid email or password' });
+    }
+
+    // Generate new token
+    const token = generateToken(user.id);
+
+    // Store token -> user mapping
+    await kv.set(`token:${token}`, { userId: user.id, email: user.email }, { ex: 7 * 24 * 60 * 60 }); // 7 days expiry
 
     return res.status(200).json({
       token,
@@ -54,6 +66,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   } catch (error) {
     console.error('Signin error:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: 'Internal server error. Please try again.' });
   }
 }
