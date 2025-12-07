@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import Layout from '@theme/Layout';
 import Link from '@docusaurus/Link';
+import { authClient } from '../lib/auth/client';
+
+const API_URL = 'http://localhost:3001';
 
 interface ProgressData {
   overallProgress: number;
@@ -80,21 +83,27 @@ export default function DashboardPage(): JSX.Element {
     // Fetch user data and progress
     async function fetchData() {
       try {
-        const [userRes, progressRes] = await Promise.all([
-          fetch('/api/auth/session'),
-          fetch('/api/progress'),
-        ]);
-
-        if (userRes.ok) {
-          const userData = await userRes.json();
-          if (userData.user?.name) {
-            setUserName(userData.user.name.split(' ')[0]);
-          }
+        // Get user from auth client
+        const storedUser = authClient.getCurrentUser();
+        if (storedUser?.name) {
+          setUserName(storedUser.name.split(' ')[0]);
         }
 
-        if (progressRes.ok) {
-          const progressData = await progressRes.json();
-          setProgress(progressData);
+        // Verify session with API
+        const session = await authClient.getSession();
+        if (session.data?.user?.name) {
+          setUserName(session.data.user.name.split(' ')[0]);
+        }
+
+        // Fetch progress (if endpoint exists)
+        try {
+          const progressRes = await fetch(`${API_URL}/api/progress`);
+          if (progressRes.ok) {
+            const progressData = await progressRes.json();
+            setProgress(progressData);
+          }
+        } catch {
+          // Progress endpoint not implemented yet, use defaults
         }
       } catch (error) {
         console.error('Failed to fetch dashboard data:', error);

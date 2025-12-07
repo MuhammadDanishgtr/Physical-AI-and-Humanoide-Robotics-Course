@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import styles from './styles.module.css';
 
+const API_URL = 'http://localhost:3001';
+
 interface Message {
   id: string;
   role: 'user' | 'assistant';
@@ -52,13 +54,15 @@ export default function ChatbotWidget({ lessonContext }: ChatbotWidgetProps): JS
     setIsLoading(true);
 
     try {
-      const response = await fetch('/api/chat', {
+      const response = await fetch(`${API_URL}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: userMessage.content,
-          sessionId,
-          lessonContext,
+          conversationHistory: messages.slice(-6).map((m) => ({
+            role: m.role,
+            content: m.content,
+          })),
         }),
       });
 
@@ -69,8 +73,7 @@ export default function ChatbotWidget({ lessonContext }: ChatbotWidgetProps): JS
       const assistantMessage: Message = {
         id: `assistant-${Date.now()}`,
         role: 'assistant',
-        content: data.message,
-        sources: data.sources,
+        content: data.response,
         timestamp: new Date(),
       };
 

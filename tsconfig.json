@@ -26,6 +26,7 @@
   "include": [
     "src/**/*",
     "api/**/*",
+    "server/**/*",
     "scripts/**/*",
     "docusaurus.config.ts",
     "sidebars.ts",
