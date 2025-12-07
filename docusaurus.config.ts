@@ -107,8 +107,8 @@ const config: Config = {
               to: '/docs/module-1/lesson-1-2-hardware',
             },
             {
-              label: 'Simulations',
-              href: '/simulations',
+              label: 'Development Environment',
+              to: '/docs/module-1/lesson-1-3-setup',
             },
           ],
         },
@@ -126,15 +126,15 @@ const config: Config = {
           ],
         },
         {
-          title: 'Legal',
+          title: 'Account',
           items: [
             {
-              label: 'Privacy Policy',
-              to: '/privacy',
+              label: 'Sign In',
+              to: '/signin',
             },
             {
-              label: 'Terms of Service',
-              to: '/terms',
+              label: 'Dashboard',
+              to: '/dashboard',
             },
           ],
         },
