@@ -1,12 +1,12 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { kv } from '@vercel/kv';
+import { connectToDatabase } from '../lib/mongodb';
 
 interface User {
-  id: string;
+  _id?: any;
   email: string;
   name: string;
   password: string;
-  createdAt: string;
+  createdAt: Date;
 }
 
 function generateToken(userId: string): string {
@@ -38,8 +38,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
+    const { db } = await connectToDatabase();
+    const usersCollection = db.collection<User>('users');
+
     // Look up user
-    const user = await kv.get<User>(`user:${email.toLowerCase()}`);
+    const user = await usersCollection.findOne({ email: email.toLowerCase() });
 
     if (!user) {
       return res.status(401).json({ error: 'Invalid email or password' });
@@ -50,22 +53,40 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
-    // Generate new token
-    const token = generateToken(user.id);
+    const userId = user._id.toString();
 
-    // Store token -> user mapping
-    await kv.set(`token:${token}`, { userId: user.id, email: user.email }, { ex: 7 * 24 * 60 * 60 }); // 7 days expiry
+    // Generate new token
+    const token = generateToken(userId);
+
+    // Store session
+    const sessionsCollection = db.collection('sessions');
+    await sessionsCollection.insertOne({
+      token,
+      userId,
+      email: user.email,
+      createdAt: new Date(),
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+    });
 
     return res.status(200).json({
       token,
       user: {
-        id: user.id,
+        id: userId,
         email: user.email,
         name: user.name,
       },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Signin error:', error);
-    return res.status(500).json({ error: 'Internal server error. Please try again.' });
+
+    // Provide more specific error messages
+    if (error.message?.includes('MONGODB_URI')) {
+      return res.status(500).json({ error: 'Database not configured. Please contact support.' });
+    }
+    if (error.message?.includes('Failed to connect')) {
+      return res.status(500).json({ error: 'Unable to connect to database. Please try again later.' });
+    }
+
+    return res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 }

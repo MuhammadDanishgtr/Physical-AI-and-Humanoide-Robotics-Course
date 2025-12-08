@@ -1,16 +1,12 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { kv } from '@vercel/kv';
+import { connectToDatabase } from '../lib/mongodb';
 
 interface User {
-  id: string;
+  _id?: string;
   email: string;
   name: string;
   password: string;
-  createdAt: string;
-}
-
-function generateId(): string {
-  return 'user_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
+  createdAt: Date;
 }
 
 function generateToken(userId: string): string {
@@ -48,40 +44,63 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'Invalid email format' });
     }
 
+    // Validate password length
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+
+    const { db } = await connectToDatabase();
+    const usersCollection = db.collection<User>('users');
+
     // Check if user already exists
-    const existingUser = await kv.get<User>(`user:${email}`);
+    const existingUser = await usersCollection.findOne({ email: email.toLowerCase() });
     if (existingUser) {
       return res.status(400).json({ error: 'User already exists with this email' });
     }
 
     // Create new user
-    const user: User = {
-      id: generateId(),
+    const newUser: User = {
       email: email.toLowerCase(),
       name,
       password, // In production, hash this with bcrypt!
-      createdAt: new Date().toISOString(),
+      createdAt: new Date(),
     };
 
-    // Store user in KV
-    await kv.set(`user:${email.toLowerCase()}`, user);
+    const result = await usersCollection.insertOne(newUser);
+    const userId = result.insertedId.toString();
 
     // Generate token
-    const token = generateToken(user.id);
+    const token = generateToken(userId);
 
-    // Store token -> user mapping for session validation
-    await kv.set(`token:${token}`, { userId: user.id, email: user.email }, { ex: 7 * 24 * 60 * 60 }); // 7 days expiry
+    // Store session
+    const sessionsCollection = db.collection('sessions');
+    await sessionsCollection.insertOne({
+      token,
+      userId,
+      email: newUser.email,
+      createdAt: new Date(),
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+    });
 
     return res.status(200).json({
       token,
       user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
+        id: userId,
+        email: newUser.email,
+        name: newUser.name,
       },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Signup error:', error);
-    return res.status(500).json({ error: 'Internal server error. Please try again.' });
+
+    // Provide more specific error messages
+    if (error.message?.includes('MONGODB_URI')) {
+      return res.status(500).json({ error: 'Database not configured. Please contact support.' });
+    }
+    if (error.message?.includes('Failed to connect')) {
+      return res.status(500).json({ error: 'Unable to connect to database. Please try again later.' });
+    }
+
+    return res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 }

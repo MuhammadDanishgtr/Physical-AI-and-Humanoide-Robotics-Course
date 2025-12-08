@@ -94,7 +94,11 @@ async function signInEmail(params: { email: string; password: string }): Promise
     const data = await response.json();
 
     if (!response.ok) {
-      return { error: { message: data.error?.message || 'Sign in failed' } };
+      // Handle both error formats: { error: string } and { error: { message: string } }
+      const errorMessage = typeof data.error === 'string'
+        ? data.error
+        : data.error?.message || 'Sign in failed';
+      return { error: { message: errorMessage } };
     }
 
     // Store token and user
@@ -103,6 +107,7 @@ async function signInEmail(params: { email: string; password: string }): Promise
 
     return { data };
   } catch (error) {
+    console.error('Sign in error:', error);
     return { error: { message: 'Network error. Please try again.' } };
   }
 }
@@ -119,7 +124,11 @@ async function signUpEmail(params: { email: string; password: string; name: stri
     const data = await response.json();
 
     if (!response.ok) {
-      return { error: { message: data.error?.message || 'Sign up failed' } };
+      // Handle both error formats: { error: string } and { error: { message: string } }
+      const errorMessage = typeof data.error === 'string'
+        ? data.error
+        : data.error?.message || 'Sign up failed';
+      return { error: { message: errorMessage } };
     }
 
     // Store token and user
@@ -128,6 +137,7 @@ async function signUpEmail(params: { email: string; password: string; name: stri
 
     return { data };
   } catch (error) {
+    console.error('Sign up error:', error);
     return { error: { message: 'Network error. Please try again.' } };
   }
 }

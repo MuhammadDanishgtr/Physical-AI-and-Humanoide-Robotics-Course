@@ -30,8 +30,8 @@ export default function SignInPage(): JSX.Element {
         return;
       }
 
-      // Redirect to dashboard on success
-      window.location.href = '/dashboard';
+      // Redirect to profile on success
+      window.location.href = '/profile';
     } catch (err) {
       setError('An unexpected error occurred. Please try again.');
     } finally {

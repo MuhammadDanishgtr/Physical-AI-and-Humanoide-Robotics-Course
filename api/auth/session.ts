@@ -1,17 +1,21 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { kv } from '@vercel/kv';
+import { connectToDatabase } from '../lib/mongodb';
+import { ObjectId } from 'mongodb';
+
+interface Session {
+  token: string;
+  userId: string;
+  email: string;
+  createdAt: Date;
+  expiresAt: Date;
+}
 
 interface User {
-  id: string;
+  _id?: any;
   email: string;
   name: string;
   password: string;
-  createdAt: string;
-}
-
-interface TokenData {
-  userId: string;
-  email: string;
+  createdAt: Date;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -32,38 +36,48 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'No token provided' });
+      return res.status(200).json({ user: null });
     }
 
     const token = authHeader.split(' ')[1];
 
     if (!token) {
-      return res.status(401).json({ error: 'Invalid token format' });
+      return res.status(200).json({ user: null });
     }
 
-    // Look up token
-    const tokenData = await kv.get<TokenData>(`token:${token}`);
+    const { db } = await connectToDatabase();
+    const sessionsCollection = db.collection<Session>('sessions');
 
-    if (!tokenData) {
-      return res.status(401).json({ error: 'Session expired or invalid' });
+    // Look up session by token
+    const session = await sessionsCollection.findOne({ token });
+
+    if (!session) {
+      return res.status(200).json({ user: null });
+    }
+
+    // Check if session expired
+    if (new Date(session.expiresAt) < new Date()) {
+      await sessionsCollection.deleteOne({ token });
+      return res.status(200).json({ user: null });
     }
 
     // Get user data
-    const user = await kv.get<User>(`user:${tokenData.email}`);
+    const usersCollection = db.collection<User>('users');
+    const user = await usersCollection.findOne({ _id: new ObjectId(session.userId) });
 
     if (!user) {
-      return res.status(401).json({ error: 'User not found' });
+      return res.status(200).json({ user: null });
     }
 
     return res.status(200).json({
       user: {
-        id: user.id,
+        id: user._id.toString(),
         email: user.email,
         name: user.name,
       },
     });
   } catch (error) {
     console.error('Session error:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    return res.status(200).json({ user: null });
   }
 }

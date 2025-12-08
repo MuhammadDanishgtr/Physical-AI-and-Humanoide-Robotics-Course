@@ -9,7 +9,7 @@ import { EMBEDDING_DIMENSION } from '../cohere';
 // Initialize Qdrant client
 const qdrantUrl = process.env.QDRANT_URL;
 const qdrantApiKey = process.env.QDRANT_API_KEY;
-const collectionName = process.env.QDRANT_COLLECTION_NAME || 'course_content';
+const collectionName = process.env.QDRANT_COLLECTION_NAME || 'course_conten';
 
 if (!qdrantUrl) {
   console.warn('QDRANT_URL not set. Vector search features will be disabled.');

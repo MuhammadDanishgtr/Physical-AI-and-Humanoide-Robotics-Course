@@ -680,7 +680,7 @@ tr:nth-child(even) {
    Authentication Pages
    ======================================== */
 .auth-container {
-  min-height: 100vh;
+  min-height: calc(100vh - 60px);
   display: flex;
   align-items: center;
   justify-content: center;

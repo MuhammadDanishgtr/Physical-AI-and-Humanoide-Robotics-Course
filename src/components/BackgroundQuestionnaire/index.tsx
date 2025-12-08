@@ -154,10 +154,18 @@ export default function BackgroundQuestionnaire({
     if (isLastStep) {
       setLoading(true);
       try {
+        // Get the auth token from localStorage
+        const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+
         // Submit questionnaire answers to API
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+
         await fetch('/api/profile/background', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({
             experienceLevel: answers.experienceLevel,
             programmingLanguages: answers.programmingLanguages || [],

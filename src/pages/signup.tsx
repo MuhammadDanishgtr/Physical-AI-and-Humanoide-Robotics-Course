@@ -61,9 +61,9 @@ export default function SignUpPage(): JSX.Element {
 
   const handleQuestionnaireComplete = () => {
     setStep('complete');
-    // Redirect to dashboard after short delay
+    // Redirect to profile after short delay
     setTimeout(() => {
-      window.location.href = '/dashboard';
+      window.location.href = '/profile';
     }, 2000);
   };
 

@@ -7,7 +7,7 @@ const config: Config = {
   tagline: 'Learn robotics hands-on, from beginner to builder',
   favicon: 'img/favicon.ico',
 
-  url: 'https://robotics-course.example.com',
+  url: 'https://robotics-course.vercel.app',
   baseUrl: '/',
 
   organizationName: 'robotics-course',
