@@ -22,7 +22,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let client: MongoClient | null = null;
 
   try {
-    client = new MongoClient(MONGODB_URI);
+    client = new MongoClient(MONGODB_URI, {
+      tls: true,
+      tlsAllowInvalidCertificates: false,
+      tlsAllowInvalidHostnames: false,
+      retryWrites: true,
+      w: 'majority',
+    });
     await client.connect();
 
     const db = client.db('robotics-course');

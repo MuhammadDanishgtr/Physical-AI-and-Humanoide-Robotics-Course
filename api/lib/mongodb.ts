@@ -15,7 +15,13 @@ export async function connectToDatabase(): Promise<{ client: MongoClient; db: Db
   }
 
   try {
-    const client = new MongoClient(MONGODB_URI);
+    const client = new MongoClient(MONGODB_URI, {
+      tls: true,
+      tlsAllowInvalidCertificates: false,
+      tlsAllowInvalidHostnames: false,
+      retryWrites: true,
+      w: 'majority',
+    });
     await client.connect();
 
     const db = client.db('robotics-course');
