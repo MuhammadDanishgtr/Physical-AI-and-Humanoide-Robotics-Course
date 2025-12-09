@@ -1,11 +1,10 @@
 /**
  * Chat API Endpoint
- * RAG-powered chatbot using Cohere embeddings + Qdrant + Claude
+ * Chatbot using Groq API (free tier)
  * Self-contained for Vercel serverless functions
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import Anthropic from '@anthropic-ai/sdk';
 
 const CHATBOT_SYSTEM_PROMPT = `You are an expert teaching assistant for the "Physical AI & Humanoid Robotics" course. Your role is to help students understand robotics concepts, from basic hardware to advanced AI integration.
 
@@ -40,9 +39,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+  const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
-  if (!ANTHROPIC_API_KEY) {
+  if (!GROQ_API_KEY) {
     return res.status(500).json({ error: 'Chat service not configured' });
   }
 
@@ -53,27 +52,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'Message is required' });
     }
 
-    // Initialize Anthropic client
-    const anthropic = new Anthropic({
-      apiKey: ANTHROPIC_API_KEY,
+    // Call Groq API
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${GROQ_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'llama-3.1-8b-instant',
+        messages: [
+          {
+            role: 'system',
+            content: CHATBOT_SYSTEM_PROMPT,
+          },
+          {
+            role: 'user',
+            content: message,
+          },
+        ],
+        max_tokens: 1024,
+        temperature: 0.7,
+      }),
     });
 
-    // Generate response using Claude
-    const response = await anthropic.messages.create({
-      model: 'claude-3-haiku-20240307',
-      max_tokens: 1024,
-      system: CHATBOT_SYSTEM_PROMPT,
-      messages: [
-        {
-          role: 'user',
-          content: message,
-        },
-      ],
-    });
+    if (!response.ok) {
+      const errorData = await response.text();
+      throw new Error(`Groq API error: ${response.status} ${errorData}`);
+    }
 
-    // Extract text from response
-    const textContent = response.content.find((block) => block.type === 'text');
-    const responseText = textContent?.type === 'text' ? textContent.text : 'I apologize, I could not generate a response.';
+    const data = await response.json();
+    const responseText = data.choices?.[0]?.message?.content || 'I apologize, I could not generate a response.';
 
     return res.status(200).json({
       message: responseText,
