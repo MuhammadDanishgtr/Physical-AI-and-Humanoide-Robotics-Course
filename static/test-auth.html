@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Auth Test Page</title>
+  <title>API Test Page</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -18,7 +18,7 @@
       margin-bottom: 20px;
     }
     h2 { margin-top: 0; }
-    input, button {
+    input, button, textarea {
       display: block;
       width: 100%;
       padding: 10px;
@@ -47,15 +47,21 @@
   </style>
 </head>
 <body>
-  <h1>Auth API Test Page</h1>
+  <h1>API Test Page</h1>
 
   <div class="card">
-    <h2>Test Signup</h2>
+    <h2>Test Chat API</h2>
+    <input type="text" id="chatMessage" placeholder="Your message" value="What is machine learning?">
+    <button onclick="testChat()">Test Chat API (/api/chat)</button>
+    <button onclick="testChatTest()">Test Chat-Test API (/api/chat-test)</button>
+  </div>
+
+  <div class="card">
+    <h2>Test Auth API</h2>
     <input type="text" id="name" placeholder="Full Name" value="Test User">
     <input type="email" id="email" placeholder="Email" value="test@example.com">
     <input type="password" id="password" placeholder="Password" value="test123456">
     <button onclick="testSignup()">Test Signup API</button>
-    <button onclick="testSignupDirect()">Test Direct Signup API</button>
   </div>
 
   <div class="card">
@@ -71,18 +77,15 @@
       resultEl.className = isError ? 'error' : 'success';
     }
 
-    async function testSignup() {
-      const name = document.getElementById('name').value;
-      const email = document.getElementById('email').value;
-      const password = document.getElementById('password').value;
-
-      resultEl.textContent = 'Testing /api/test-signup...';
+    async function testChat() {
+      const message = document.getElementById('chatMessage').value;
+      resultEl.textContent = 'Testing /api/chat...';
 
       try {
-        const response = await fetch('/api/test-signup', {
+        const response = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, email, password })
+          body: JSON.stringify({ message, sessionId: 'test-session' })
         });
         const data = await response.json();
         showResult({ status: response.status, data }, !response.ok);
@@ -91,7 +94,24 @@
       }
     }
 
-    async function testSignupDirect() {
+    async function testChatTest() {
+      const message = document.getElementById('chatMessage').value;
+      resultEl.textContent = 'Testing /api/chat-test...';
+
+      try {
+        const response = await fetch('/api/chat-test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message })
+        });
+        const data = await response.json();
+        showResult({ status: response.status, data }, !response.ok);
+      } catch (error) {
+        showResult({ error: error.message }, true);
+      }
+    }
+
+    async function testSignup() {
       const name = document.getElementById('name').value;
       const email = document.getElementById('email').value;
       const password = document.getElementById('password').value;
