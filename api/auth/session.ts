@@ -1,22 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { connectToDatabase } from '../lib/mongodb';
-import { ObjectId } from 'mongodb';
-
-interface Session {
-  token: string;
-  userId: string;
-  email: string;
-  createdAt: Date;
-  expiresAt: Date;
-}
-
-interface User {
-  _id?: any;
-  email: string;
-  name: string;
-  password: string;
-  createdAt: Date;
-}
+import { MongoClient, ObjectId } from 'mongodb';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Set CORS headers
@@ -32,6 +15,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  const MONGODB_URI = process.env.MONGODB_URI;
+
+  if (!MONGODB_URI) {
+    return res.status(200).json({ user: null });
+  }
+
+  let client: MongoClient | null = null;
+
   try {
     const authHeader = req.headers.authorization;
 
@@ -45,10 +36,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({ user: null });
     }
 
-    const { db } = await connectToDatabase();
-    const sessionsCollection = db.collection<Session>('sessions');
+    // Connect to MongoDB
+    client = new MongoClient(MONGODB_URI);
+    await client.connect();
+    const db = client.db('robotics-course');
 
     // Look up session by token
+    const sessionsCollection = db.collection('sessions');
     const session = await sessionsCollection.findOne({ token });
 
     if (!session) {
@@ -62,7 +56,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // Get user data
-    const usersCollection = db.collection<User>('users');
+    const usersCollection = db.collection('users');
     const user = await usersCollection.findOne({ _id: new ObjectId(session.userId) });
 
     if (!user) {
@@ -79,5 +73,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch (error) {
     console.error('Session error:', error);
     return res.status(200).json({ user: null });
+  } finally {
+    if (client) {
+      await client.close();
+    }
   }
 }

@@ -1,21 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { connectToDatabase } from '../lib/mongodb';
-
-interface User {
-  _id?: any;
-  email: string;
-  name: string;
-  password: string;
-  createdAt: Date;
-}
-
-function generateToken(userId: string): string {
-  const payload = {
-    userId,
-    exp: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days
-  };
-  return Buffer.from(JSON.stringify(payload)).toString('base64');
-}
+import { MongoClient } from 'mongodb';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Set CORS headers
@@ -31,32 +15,46 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  const MONGODB_URI = process.env.MONGODB_URI;
+
+  if (!MONGODB_URI) {
+    return res.status(500).json({ error: 'Database not configured' });
+  }
+
+  let client: MongoClient | null = null;
+
   try {
-    const { email, password } = req.body;
+    const { email, password } = req.body || {};
 
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
-    const { db } = await connectToDatabase();
-    const usersCollection = db.collection<User>('users');
+    // Connect to MongoDB
+    client = new MongoClient(MONGODB_URI);
+    await client.connect();
+    const db = client.db('robotics-course');
 
     // Look up user
+    const usersCollection = db.collection('users');
     const user = await usersCollection.findOne({ email: email.toLowerCase() });
 
     if (!user) {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
-    // Check password (in production, use bcrypt.compare)
+    // Check password
     if (user.password !== password) {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
     const userId = user._id.toString();
 
-    // Generate new token
-    const token = generateToken(userId);
+    // Generate token
+    const token = Buffer.from(JSON.stringify({
+      userId,
+      exp: Date.now() + 7 * 24 * 60 * 60 * 1000,
+    })).toString('base64');
 
     // Store session
     const sessionsCollection = db.collection('sessions');
@@ -65,7 +63,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       userId,
       email: user.email,
       createdAt: new Date(),
-      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
     });
 
     return res.status(200).json({
@@ -78,15 +76,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   } catch (error: any) {
     console.error('Signin error:', error);
-
-    // Provide more specific error messages
-    if (error.message?.includes('MONGODB_URI')) {
-      return res.status(500).json({ error: 'Database not configured. Please contact support.' });
+    return res.status(500).json({ error: error.message || 'Something went wrong' });
+  } finally {
+    if (client) {
+      await client.close();
     }
-    if (error.message?.includes('Failed to connect')) {
-      return res.status(500).json({ error: 'Unable to connect to database. Please try again later.' });
-    }
-
-    return res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 }

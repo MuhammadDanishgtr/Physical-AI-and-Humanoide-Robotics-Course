@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { connectToDatabase } from '../lib/mongodb';
+import { MongoClient } from 'mongodb';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Set CORS headers
@@ -15,14 +15,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  const MONGODB_URI = process.env.MONGODB_URI;
+  let client: MongoClient | null = null;
+
   try {
     const authHeader = req.headers.authorization;
 
-    if (authHeader && authHeader.startsWith('Bearer ')) {
+    if (authHeader && authHeader.startsWith('Bearer ') && MONGODB_URI) {
       const token = authHeader.split(' ')[1];
 
       if (token) {
-        const { db } = await connectToDatabase();
+        client = new MongoClient(MONGODB_URI);
+        await client.connect();
+        const db = client.db('robotics-course');
         const sessionsCollection = db.collection('sessions');
 
         // Delete the session
@@ -33,7 +38,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ success: true });
   } catch (error) {
     console.error('Signout error:', error);
-    // Still return success even on error - user should be signed out client-side
     return res.status(200).json({ success: true });
+  } finally {
+    if (client) {
+      await client.close();
+    }
   }
 }
