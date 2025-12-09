@@ -1,7 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import styles from './styles.module.css';
 
-const API_URL = 'http://localhost:3001';
+// Use relative path for production, localhost for development
+const API_URL = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+  ? ''
+  : 'http://localhost:3001';
 
 interface Message {
   id: string;
@@ -59,10 +62,8 @@ export default function ChatbotWidget({ lessonContext }: ChatbotWidgetProps): JS
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: userMessage.content,
-          conversationHistory: messages.slice(-6).map((m) => ({
-            role: m.role,
-            content: m.content,
-          })),
+          sessionId,
+          lessonContext,
         }),
       });
 
@@ -73,7 +74,8 @@ export default function ChatbotWidget({ lessonContext }: ChatbotWidgetProps): JS
       const assistantMessage: Message = {
         id: `assistant-${Date.now()}`,
         role: 'assistant',
-        content: data.response,
+        content: data.message || data.response || 'No response received',
+        sources: data.sources,
         timestamp: new Date(),
       };
 
