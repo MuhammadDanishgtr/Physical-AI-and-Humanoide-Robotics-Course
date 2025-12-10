@@ -1,112 +1,96 @@
 /**
  * Translation API Endpoint
- * Translate content to Urdu using Claude with caching
+ * Translate content to Urdu using Groq API
+ * Self-contained for Vercel serverless functions
  */
 
-import { translateToUrdu } from '../src/lib/anthropic';
-import { db, translationCache } from '../src/lib/db';
-import { eq } from 'drizzle-orm';
-import { createHash } from 'crypto';
+import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-interface TranslateRequest {
-  text: string;
-  targetLanguage?: 'ur';
-}
+const TRANSLATION_SYSTEM_PROMPT = `You are a professional translator specializing in English to Urdu translation for educational content about robotics and AI.
 
-interface TranslateResponse {
-  translatedText: string;
-  cached: boolean;
-}
+Guidelines:
+1. Translate the text naturally into Urdu while preserving technical terms in English (e.g., "sensor", "motor", "Arduino", "Python", "API")
+2. Maintain the meaning and tone of the original text
+3. Use formal Urdu appropriate for educational content
+4. Keep proper nouns, code snippets, and technical acronyms in English
+5. Return ONLY the translated text, no explanations or notes`;
 
-function hashText(text: string): string {
-  return createHash('sha256').update(text).digest('hex');
-}
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // Set CORS headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-export default async function handler(req: Request): Promise<Response> {
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
   if (req.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-      status: 405,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const GROQ_API_KEY = process.env.GROQ_API_KEY;
+
+  if (!GROQ_API_KEY) {
+    return res.status(500).json({ error: 'Translation service not configured' });
   }
 
   try {
-    const body: TranslateRequest = await req.json();
-    const { text, targetLanguage = 'ur' } = body;
+    const { text, targetLanguage = 'ur' } = req.body || {};
 
     if (!text?.trim()) {
-      return new Response(JSON.stringify({ error: 'Text is required' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return res.status(400).json({ error: 'Text is required' });
     }
 
     // Only support Urdu for now
     if (targetLanguage !== 'ur') {
-      return new Response(JSON.stringify({ error: 'Only Urdu translation is supported' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return res.status(400).json({ error: 'Only Urdu translation is supported' });
     }
 
-    // Generate hash for caching
-    const textHash = hashText(text);
-
-    // Check cache first
-    try {
-      const cached = await db.query.translationCache.findFirst({
-        where: eq(translationCache.sourceTextHash, textHash),
-      });
-
-      if (cached) {
-        const response: TranslateResponse = {
-          translatedText: cached.translatedText,
-          cached: true,
-        };
-        return new Response(JSON.stringify(response), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      }
-    } catch (cacheError) {
-      console.warn('Cache lookup failed:', cacheError);
-      // Continue without cache
-    }
-
-    // Generate translation
-    const { translation, tokensUsed } = await translateToUrdu(text);
-
-    // Cache the result
-    try {
-      await db.insert(translationCache).values({
-        sourceText: text,
-        sourceTextHash: textHash,
-        targetLanguage: 'ur',
-        translatedText: translation,
-        modelUsed: 'claude-3-haiku-20240307',
-      });
-    } catch (cacheError) {
-      console.error('Failed to cache translation:', cacheError);
-      // Don't fail if caching fails
-    }
-
-    const response: TranslateResponse = {
-      translatedText: translation,
-      cached: false,
-    };
-
-    return new Response(JSON.stringify(response), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
+    // Call Groq API for translation
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${GROQ_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'llama-3.1-8b-instant',
+        messages: [
+          {
+            role: 'system',
+            content: TRANSLATION_SYSTEM_PROMPT,
+          },
+          {
+            role: 'user',
+            content: `Translate the following text to Urdu:\n\n${text}`,
+          },
+        ],
+        max_tokens: 2048,
+        temperature: 0.3,
+      }),
     });
-  } catch (error) {
+
+    if (!response.ok) {
+      const errorData = await response.text();
+      throw new Error(`Groq API error: ${response.status} ${errorData}`);
+    }
+
+    const data = await response.json();
+    const translatedText = data.choices?.[0]?.message?.content || '';
+
+    if (!translatedText) {
+      throw new Error('No translation received from API');
+    }
+
+    return res.status(200).json({
+      translatedText,
+      cached: false,
+    });
+  } catch (error: any) {
     console.error('Translation API error:', error);
-    return new Response(
-      JSON.stringify({ error: 'Failed to translate text' }),
-      {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      }
-    );
+    return res.status(500).json({
+      error: error.message || 'Failed to translate text',
+    });
   }
 }

@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
 import styles from './styles.module.css';
 
-const API_URL = 'http://localhost:3001';
+// Use relative path in production, localhost for development
+const API_URL = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+  ? ''
+  : 'http://localhost:3001';
 
 interface TranslateButtonProps {
   className?: string;
