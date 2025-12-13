@@ -20,6 +20,29 @@ interface TranslateButtonProps {
   className?: string;
 }
 
+// Find the main content element in Docusaurus pages
+// Docusaurus uses different selectors for docs vs blog vs custom pages
+const findContentElement = (): Element | null => {
+  // Try multiple selectors in order of specificity
+  const selectors = [
+    'div.markdown',                    // Docusaurus docs and blog content
+    'article .markdown',               // Blog post wrapper
+    '.theme-doc-markdown',             // Docusaurus theme class
+    'article[class*="markdown"]',      // Any article with markdown class
+    'main article',                    // Generic main article
+    '.docMainContainer article',       // Docs main container
+    'main .container',                 // Fallback to main container
+  ];
+
+  for (const selector of selectors) {
+    const element = document.querySelector(selector);
+    if (element && element.textContent?.trim()) {
+      return element;
+    }
+  }
+  return null;
+};
+
 export default function TranslateButton({ className }: TranslateButtonProps): JSX.Element {
   const [isTranslating, setIsTranslating] = useState(false);
   const [isUrdu, setIsUrdu] = useState(false);
@@ -31,9 +54,9 @@ export default function TranslateButton({ className }: TranslateButtonProps): JS
 
     if (isUrdu && originalContent) {
       // Switch back to English
-      const articleElement = document.querySelector('article.markdown');
-      if (articleElement) {
-        articleElement.innerHTML = originalContent;
+      const contentElement = findContentElement();
+      if (contentElement) {
+        contentElement.innerHTML = originalContent;
         document.documentElement.dir = 'ltr';
         document.documentElement.lang = 'en';
       }
@@ -45,16 +68,16 @@ export default function TranslateButton({ className }: TranslateButtonProps): JS
     setIsTranslating(true);
 
     try {
-      const articleElement = document.querySelector('article.markdown');
-      if (!articleElement) {
-        throw new Error('Content not found');
+      const contentElement = findContentElement();
+      if (!contentElement) {
+        throw new Error('Content not found. Please navigate to a docs or blog page.');
       }
 
       // Store original content
-      setOriginalContent(articleElement.innerHTML);
+      setOriginalContent(contentElement.innerHTML);
 
       // Get text content for translation
-      const textContent = articleElement.textContent || '';
+      const textContent = contentElement.textContent || '';
 
       // Split into chunks if too long (max 4000 chars per request)
       const maxChunkSize = 3500;
@@ -114,8 +137,8 @@ export default function TranslateButton({ className }: TranslateButtonProps): JS
         <div class="${styles.urduText}">${translatedText.replace(/\n/g, '<br/>')}</div>
       `;
 
-      articleElement.innerHTML = '';
-      articleElement.appendChild(urduContent);
+      contentElement.innerHTML = '';
+      contentElement.appendChild(urduContent);
 
       // Set RTL direction
       document.documentElement.dir = 'rtl';
@@ -127,9 +150,9 @@ export default function TranslateButton({ className }: TranslateButtonProps): JS
       setError(err instanceof Error ? err.message : 'Translation failed. Make sure the API server is running.');
       // Restore original content if translation fails
       if (originalContent) {
-        const articleElement = document.querySelector('article.markdown');
-        if (articleElement) {
-          articleElement.innerHTML = originalContent;
+        const contentElement = findContentElement();
+        if (contentElement) {
+          contentElement.innerHTML = originalContent;
         }
         setOriginalContent(null);
       }
