@@ -6,14 +6,19 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-const TRANSLATION_SYSTEM_PROMPT = `You are a professional translator specializing in English to Urdu translation for educational content about robotics and AI.
+const TRANSLATION_SYSTEM_PROMPT = `You are an expert translator specializing in technical content translation from English to Urdu. Your translations are used for an educational robotics course.
 
-Guidelines:
-1. Translate the text naturally into Urdu while preserving technical terms in English (e.g., "sensor", "motor", "Arduino", "Python", "API")
-2. Maintain the meaning and tone of the original text
-3. Use formal Urdu appropriate for educational content
-4. Keep proper nouns, code snippets, and technical acronyms in English
-5. Return ONLY the translated text, no explanations or notes`;
+Key guidelines:
+1. Preserve all technical terms in English within the Urdu text (e.g., "sensor", "motor", "Python", "API", "Arduino", "robot", "AI")
+2. Keep code snippets, variable names, commands, and URLs in English
+3. Maintain the structure of the content (headings, lists, paragraphs)
+4. Use formal Urdu suitable for educational content
+5. Preserve any markdown formatting (headers, bold, code blocks, etc.)
+6. For mathematical expressions and formulas, keep them in their original form
+7. Translate explanatory text naturally while keeping technical accuracy
+8. Numbers should remain in Western Arabic numerals (1, 2, 3) not Eastern Arabic numerals
+
+Output only the translated text, no explanations or notes.`;
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Set CORS headers
@@ -48,6 +53,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // Call Groq API for translation
+    // Using llama-3.3-70b-versatile for better multilingual support
     const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -55,7 +61,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'llama-3.1-8b-instant',
+        model: 'llama-3.3-70b-versatile',
         messages: [
           {
             role: 'system',
@@ -63,10 +69,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           },
           {
             role: 'user',
-            content: `Translate the following text to Urdu:\n\n${text}`,
+            content: `Translate the following educational content to Urdu, preserving technical terms in English:\n\n${text}`,
           },
         ],
-        max_tokens: 2048,
+        max_tokens: 4096,
         temperature: 0.3,
       }),
     });

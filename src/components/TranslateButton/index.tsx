@@ -1,10 +1,20 @@
 import React, { useState } from 'react';
 import styles from './styles.module.css';
 
-// Use relative path in production, localhost for development
-const API_URL = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
-  ? ''
-  : 'http://localhost:3001';
+// Determine API URL based on environment
+// Production (Vercel): use relative path which calls /api/translate
+// Development: use localhost:3001 for the Express server
+const getApiUrl = (): string => {
+  if (typeof window === 'undefined') return '';
+
+  const hostname = window.location.hostname;
+  // Check for localhost, 127.0.0.1, or any local development
+  if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname.includes('192.168.')) {
+    return 'http://localhost:3001';
+  }
+  // Production - use relative path for Vercel serverless functions
+  return '';
+};
 
 interface TranslateButtonProps {
   className?: string;
@@ -71,7 +81,7 @@ export default function TranslateButton({ className }: TranslateButtonProps): JS
       const translatedChunks: string[] = [];
 
       for (const chunk of chunks) {
-        const response = await fetch(`${API_URL}/api/translate`, {
+        const response = await fetch(`${getApiUrl()}/api/translate`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
