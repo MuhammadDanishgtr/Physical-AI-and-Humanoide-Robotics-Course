@@ -1,0 +1,685 @@
+openapi: 3.0.3
+info:
+  title: Physical AI & Humanoid Robotics Course Platform API
+  description: API specification for the course platform backend services
+  version: 1.0.0
+  contact:
+    name: Course Platform Team
+
+servers:
+  - url: /api
+    description: API base path
+
+tags:
+  - name: Auth
+    description: Authentication endpoints (Better-Auth managed)
+  - name: Profile
+    description: User profile and background management
+  - name: Progress
+    description: Learning progress tracking
+  - name: Chat
+    description: RAG chatbot interactions
+  - name: Translation
+    description: Urdu translation service
+
+paths:
+  # ============================================
+  # AUTH ENDPOINTS (Better-Auth managed)
+  # ============================================
+  /auth/signup:
+    post:
+      tags: [Auth]
+      summary: Register a new user
+      description: Creates a new user account with email/password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignupRequest'
+      responses:
+        '200':
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          description: Invalid input or email already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/signin:
+    post:
+      tags: [Auth]
+      summary: Sign in existing user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SigninRequest'
+      responses:
+        '200':
+          description: Sign in successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          description: Invalid credentials
+
+  /auth/signout:
+    post:
+      tags: [Auth]
+      summary: Sign out current user
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Sign out successful
+
+  /auth/get-session:
+    get:
+      tags: [Auth]
+      summary: Get current session
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Session data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionResponse'
+        '401':
+          description: Not authenticated
+
+  # ============================================
+  # PROFILE ENDPOINTS
+  # ============================================
+  /profile/background:
+    get:
+      tags: [Profile]
+      summary: Get user's background profile
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Background profile data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackgroundProfile'
+        '404':
+          description: Profile not found
+
+    post:
+      tags: [Profile]
+      summary: Create or update background profile
+      description: Called after signup to save user's background assessment
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BackgroundProfileInput'
+      responses:
+        '200':
+          description: Profile saved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackgroundProfile'
+        '400':
+          description: Invalid input
+
+  /profile/recommendations:
+    get:
+      tags: [Profile]
+      summary: Get personalized lesson recommendations
+      description: Returns recommended starting lessons based on user's background
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: List of recommended lessons
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  recommendations:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LessonRecommendation'
+
+  # ============================================
+  # PROGRESS ENDPOINTS
+  # ============================================
+  /progress:
+    get:
+      tags: [Progress]
+      summary: Get user's complete progress
+      description: Returns progress for all lessons
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Progress data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProgressSummary'
+
+  /progress/{lessonId}:
+    get:
+      tags: [Progress]
+      summary: Get progress for specific lesson
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: lessonId
+          in: path
+          required: true
+          schema:
+            type: string
+            example: "lesson-1-1"
+      responses:
+        '200':
+          description: Lesson progress
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProgressRecord'
+
+    put:
+      tags: [Progress]
+      summary: Update lesson progress
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: lessonId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProgressUpdate'
+      responses:
+        '200':
+          description: Progress updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProgressRecord'
+
+  /progress/{lessonId}/complete:
+    post:
+      tags: [Progress]
+      summary: Mark lesson as complete
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: lessonId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                knowledgeCheckScore:
+                  type: integer
+                  minimum: 0
+                  maximum: 100
+                  description: Optional quiz score
+      responses:
+        '200':
+          description: Lesson marked complete
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProgressRecord'
+
+  # ============================================
+  # CHATBOT ENDPOINTS
+  # ============================================
+  /chat:
+    post:
+      tags: [Chat]
+      summary: Send message to RAG chatbot
+      description: Queries course content and returns AI-generated response with citations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatRequest'
+      responses:
+        '200':
+          description: Chatbot response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatResponse'
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Service temporarily unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceUnavailableResponse'
+
+  /chat/{interactionId}/feedback:
+    post:
+      tags: [Chat]
+      summary: Submit feedback on chatbot response
+      parameters:
+        - name: interactionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [helpful]
+              properties:
+                helpful:
+                  type: boolean
+                  description: Whether the response was helpful
+      responses:
+        '200':
+          description: Feedback recorded
+
+  # ============================================
+  # TRANSLATION ENDPOINTS
+  # ============================================
+  /translate:
+    post:
+      tags: [Translation]
+      summary: Translate content to Urdu
+      description: Translates lesson content while preserving technical terms
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TranslationRequest'
+      responses:
+        '200':
+          description: Translated content
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TranslationResponse'
+        '503':
+          description: Translation service unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceUnavailableResponse'
+
+  /translate/lesson/{lessonId}:
+    get:
+      tags: [Translation]
+      summary: Get cached Urdu translation of lesson
+      description: Returns cached translation if available, triggers translation if not
+      parameters:
+        - name: lessonId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Translated lesson content
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LessonTranslation'
+        '202':
+          description: Translation in progress
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "translating"
+                  estimatedTime:
+                    type: integer
+                    description: Estimated seconds until ready
+
+# ============================================
+# COMPONENTS
+# ============================================
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: better-auth.session_token
+
+  schemas:
+    # Auth Schemas
+    SignupRequest:
+      type: object
+      required: [email, password, name]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        name:
+          type: string
+          maxLength: 100
+
+    SigninRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+
+    AuthResponse:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        session:
+          type: object
+          properties:
+            id:
+              type: string
+            expiresAt:
+              type: string
+              format: date-time
+
+    SessionResponse:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        session:
+          type: object
+          properties:
+            id:
+              type: string
+            expiresAt:
+              type: string
+              format: date-time
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        image:
+          type: string
+          format: uri
+        emailVerified:
+          type: boolean
+
+    # Profile Schemas
+    BackgroundProfile:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        softwareLevel:
+          $ref: '#/components/schemas/ExperienceLevel'
+        hardwareLevel:
+          $ref: '#/components/schemas/ExperienceLevel'
+        goals:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    BackgroundProfileInput:
+      type: object
+      required: [softwareLevel, hardwareLevel]
+      properties:
+        softwareLevel:
+          $ref: '#/components/schemas/ExperienceLevel'
+        hardwareLevel:
+          $ref: '#/components/schemas/ExperienceLevel'
+        goals:
+          type: string
+          maxLength: 500
+
+    ExperienceLevel:
+      type: string
+      enum: [none, beginner, intermediate, advanced]
+
+    LessonRecommendation:
+      type: object
+      properties:
+        lessonId:
+          type: string
+        title:
+          type: string
+        reason:
+          type: string
+          description: Why this lesson is recommended
+        priority:
+          type: integer
+          minimum: 1
+          maximum: 5
+
+    # Progress Schemas
+    ProgressSummary:
+      type: object
+      properties:
+        overallProgress:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 100
+          description: Percentage of course completed
+        totalLessons:
+          type: integer
+        completedLessons:
+          type: integer
+        estimatedTimeRemaining:
+          type: integer
+          description: Minutes remaining
+        modules:
+          type: array
+          items:
+            $ref: '#/components/schemas/ModuleProgress'
+        lessons:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProgressRecord'
+
+    ModuleProgress:
+      type: object
+      properties:
+        moduleId:
+          type: string
+        title:
+          type: string
+        completedLessons:
+          type: integer
+        totalLessons:
+          type: integer
+        progress:
+          type: number
+          format: float
+
+    ProgressRecord:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        lessonId:
+          type: string
+        status:
+          $ref: '#/components/schemas/ProgressStatus'
+        knowledgeCheckScore:
+          type: integer
+          nullable: true
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    ProgressStatus:
+      type: string
+      enum: [not_started, in_progress, completed]
+
+    ProgressUpdate:
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/ProgressStatus'
+
+    # Chat Schemas
+    ChatRequest:
+      type: object
+      required: [question, sessionId]
+      properties:
+        question:
+          type: string
+          maxLength: 1000
+        sessionId:
+          type: string
+          description: Browser session ID for anonymous tracking
+        currentLessonId:
+          type: string
+          description: Lesson user is currently viewing
+
+    ChatResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Interaction ID for feedback
+        response:
+          type: string
+        citations:
+          type: array
+          items:
+            $ref: '#/components/schemas/Citation'
+
+    Citation:
+      type: object
+      properties:
+        lessonId:
+          type: string
+        title:
+          type: string
+        url:
+          type: string
+          format: uri
+        relevance:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+
+    # Translation Schemas
+    TranslationRequest:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+          maxLength: 10000
+          description: Markdown content to translate
+        preserveTerms:
+          type: array
+          items:
+            type: string
+          description: Additional technical terms to preserve
+
+    TranslationResponse:
+      type: object
+      properties:
+        translatedContent:
+          type: string
+        preservedTerms:
+          type: array
+          items:
+            type: string
+        cached:
+          type: boolean
+          description: Whether this was served from cache
+
+    LessonTranslation:
+      type: object
+      properties:
+        lessonId:
+          type: string
+        originalContent:
+          type: string
+        translatedContent:
+          type: string
+        translatedAt:
+          type: string
+          format: date-time
+
+    # Error Schemas
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        code:
+          type: string
+
+    ServiceUnavailableResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "service_unavailable"
+        message:
+          type: string
+          example: "The assistant is temporarily unavailable. Please try again later."
+        retryAfter:
+          type: integer
+          description: Seconds until service may be available
