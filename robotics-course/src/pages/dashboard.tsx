@@ -14,6 +14,25 @@ interface ProgressData {
   recommendations: string[];
 }
 
+interface BackgroundProfile {
+  experienceLevel: 'beginner' | 'intermediate' | 'advanced';
+  programmingLanguages: string[];
+  hasRoboticsExperience: boolean;
+  primaryGoals: string[];
+  availableHardware: string[];
+  weeklyHoursAvailable: number;
+  preferredLanguage: 'en' | 'ur';
+}
+
+interface StudySchedule {
+  hoursPerWeek: number;
+  hoursPerDay: number;
+  daysPerWeek: number;
+  estimatedCompletionWeeks: number;
+  dailyLessons: number;
+  weeklyLessons: number;
+}
+
 interface ModuleProgress {
   id: string;
   title: string;
@@ -101,6 +120,103 @@ function getStatusText(status: string): string {
   }
 }
 
+// Calculate study schedule based on weekly hours
+function calculateStudySchedule(weeklyHours: number, totalLessons: number, lessonsCompleted: number): StudySchedule {
+  const remainingLessons = totalLessons - lessonsCompleted;
+  const hoursPerLesson = 1.5; // Average 1.5 hours per lesson
+  const totalHoursNeeded = remainingLessons * hoursPerLesson;
+
+  // Calculate days per week based on hours (assume 1-2 hours per study session)
+  let daysPerWeek: number;
+  let hoursPerDay: number;
+
+  if (weeklyHours <= 3) {
+    daysPerWeek = 2;
+    hoursPerDay = weeklyHours / 2;
+  } else if (weeklyHours <= 7) {
+    daysPerWeek = 3;
+    hoursPerDay = weeklyHours / 3;
+  } else if (weeklyHours <= 12) {
+    daysPerWeek = 4;
+    hoursPerDay = weeklyHours / 4;
+  } else {
+    daysPerWeek = 5;
+    hoursPerDay = weeklyHours / 5;
+  }
+
+  const lessonsPerWeek = Math.max(1, Math.floor(weeklyHours / hoursPerLesson));
+  const lessonsPerDay = Math.max(1, Math.round(lessonsPerWeek / daysPerWeek * 10) / 10);
+  const estimatedWeeks = Math.ceil(remainingLessons / lessonsPerWeek);
+
+  return {
+    hoursPerWeek: weeklyHours,
+    hoursPerDay: Math.round(hoursPerDay * 10) / 10,
+    daysPerWeek,
+    estimatedCompletionWeeks: estimatedWeeks,
+    dailyLessons: lessonsPerDay,
+    weeklyLessons: lessonsPerWeek,
+  };
+}
+
+// Generate personalized recommendations based on profile
+function getPersonalizedRecommendations(
+  profile: BackgroundProfile | null,
+  progress: ProgressData,
+  schedule: StudySchedule | null
+): string[] {
+  const recommendations: string[] = [];
+
+  if (!profile) {
+    return [
+      'Start with Lesson 1.1 to learn about Physical AI concepts',
+      'Set up your development environment in Lesson 1.3',
+      'Use the Course Assistant chatbot for help',
+    ];
+  }
+
+  // Based on experience level
+  if (profile.experienceLevel === 'beginner') {
+    recommendations.push('Take your time with the fundamentals - they are the foundation for everything else');
+  } else if (profile.experienceLevel === 'advanced') {
+    recommendations.push('Feel free to skip familiar concepts and focus on advanced integration topics');
+  }
+
+  // Based on weekly hours
+  if (schedule) {
+    if (schedule.hoursPerWeek <= 3) {
+      recommendations.push(`With ${schedule.hoursPerWeek} hours/week, focus on one concept at a time for better retention`);
+    } else if (schedule.hoursPerWeek >= 10) {
+      recommendations.push(`Great commitment! ${schedule.hoursPerWeek} hours/week will help you complete the course in ${schedule.estimatedCompletionWeeks} weeks`);
+    } else {
+      recommendations.push(`Study ${schedule.daysPerWeek} days/week, about ${schedule.hoursPerDay} hours each session for best results`);
+    }
+  }
+
+  // Based on goals
+  if (profile.primaryGoals.includes('career')) {
+    recommendations.push('Focus on hands-on projects to build your portfolio for career opportunities');
+  }
+  if (profile.primaryGoals.includes('hobby')) {
+    recommendations.push('Explore creative projects in Module 4 to bring your hobby ideas to life');
+  }
+
+  // Based on hardware
+  if (profile.availableHardware.includes('none')) {
+    recommendations.push('Check Lesson 1.2 for recommended starter hardware kits');
+  } else if (profile.availableHardware.includes('raspberrypi')) {
+    recommendations.push('Your Raspberry Pi is perfect for the computer vision lessons in Module 2');
+  }
+
+  // Progress-based
+  if (progress.lessonsCompleted === 0) {
+    recommendations.push('Start with Lesson 1.1 - Introduction to Physical AI');
+  } else if (progress.overallProgress > 50) {
+    recommendations.push('Great progress! You\'re ready for advanced integration topics');
+  }
+
+  return recommendations.slice(0, 4); // Return max 4 recommendations
+}
+
 // Dashboard content component that only runs in browser
 function DashboardContent(): JSX.Element {
   const [progress, setProgress] = useState<ProgressData>(defaultProgress);
@@ -109,6 +225,8 @@ function DashboardContent(): JSX.Element {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [authChecked, setAuthChecked] = useState(false);
+  const [profile, setProfile] = useState<BackgroundProfile | null>(null);
+  const [studySchedule, setStudySchedule] = useState<StudySchedule | null>(null);
 
   useEffect(() => {
     // Check authentication first
@@ -152,11 +270,13 @@ function DashboardContent(): JSX.Element {
     if (!authChecked || !user) return;
 
     // Load progress from localStorage
+    let currentProgress = defaultProgress;
     try {
       const storedProgress = localStorage.getItem('course_progress');
       if (storedProgress) {
         const progressData = JSON.parse(storedProgress);
-        setProgress(prev => ({ ...prev, ...progressData }));
+        currentProgress = { ...currentProgress, ...progressData };
+        setProgress(currentProgress);
 
         if (progressData.completedLessons && Array.isArray(progressData.completedLessons)) {
           const updatedModules = defaultModules.map(module => {
@@ -182,6 +302,41 @@ function DashboardContent(): JSX.Element {
     } catch {
       // Ignore errors
     }
+
+    // Fetch user's background profile from API
+    const fetchProfile = async () => {
+      try {
+        const token = localStorage.getItem('auth_token');
+        if (!token) return;
+
+        const response = await fetch('/api/profile/background', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.profile) {
+            setProfile(data.profile);
+
+            // Calculate study schedule based on weekly hours
+            const schedule = calculateStudySchedule(
+              data.profile.weeklyHoursAvailable || 5,
+              currentProgress.totalLessons,
+              currentProgress.lessonsCompleted
+            );
+            setStudySchedule(schedule);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch profile:', error);
+      }
+    };
+
+    fetchProfile();
   }, [authChecked, user]);
 
   // Show loading state while checking authentication
@@ -309,25 +464,115 @@ function DashboardContent(): JSX.Element {
             </Link>
           </div>
 
-          {/* Streak Card */}
+          {/* Study Schedule Card */}
           <div style={{
             background: 'var(--ifm-card-background-color)',
             borderRadius: '12px',
             padding: '1.5rem',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-            textAlign: 'center'
+            boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
           }}>
-            <h2 style={{ fontSize: '1.1rem', marginBottom: '1rem' }}>Learning Streak</h2>
+            <h2 style={{ fontSize: '1.1rem', marginBottom: '1rem' }}>Your Study Plan</h2>
+            {studySchedule ? (
+              <div>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  marginBottom: '1rem',
+                  padding: '0.75rem',
+                  background: 'var(--ifm-color-primary-lightest)',
+                  borderRadius: '8px'
+                }}>
+                  <span style={{ fontSize: '1.5rem' }}>📅</span>
+                  <div>
+                    <p style={{ margin: 0, fontWeight: 'bold', color: 'var(--ifm-color-primary-darkest)' }}>
+                      {studySchedule.hoursPerWeek} hours/week
+                    </p>
+                    <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--ifm-color-primary-dark)' }}>
+                      {studySchedule.daysPerWeek} days × {studySchedule.hoursPerDay}h each
+                    </p>
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                  <div style={{
+                    padding: '0.75rem',
+                    background: 'var(--ifm-background-surface-color)',
+                    borderRadius: '8px',
+                    textAlign: 'center'
+                  }}>
+                    <p style={{ margin: 0, fontSize: '1.25rem', fontWeight: 'bold' }}>
+                      {studySchedule.weeklyLessons}
+                    </p>
+                    <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--ifm-font-color-secondary)' }}>
+                      lessons/week
+                    </p>
+                  </div>
+                  <div style={{
+                    padding: '0.75rem',
+                    background: 'var(--ifm-background-surface-color)',
+                    borderRadius: '8px',
+                    textAlign: 'center'
+                  }}>
+                    <p style={{ margin: 0, fontSize: '1.25rem', fontWeight: 'bold' }}>
+                      ~{studySchedule.estimatedCompletionWeeks}
+                    </p>
+                    <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--ifm-font-color-secondary)' }}>
+                      weeks to complete
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center' }}>
+                <span style={{ fontSize: '2rem' }}>📚</span>
+                <p style={{ color: 'var(--ifm-font-color-secondary)', margin: '0.5rem 0' }}>
+                  Complete your profile to see your personalized study plan
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* Streak Section */}
+      <section style={{ marginBottom: '2rem' }}>
+        <div style={{
+          background: 'linear-gradient(135deg, var(--ifm-color-primary) 0%, var(--ifm-color-primary-dark) 100%)',
+          borderRadius: '12px',
+          padding: '1.5rem',
+          color: 'white',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '1rem'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
             <span style={{ fontSize: '3rem' }}>
               {progress.streak > 0 ? '🔥' : '🎯'}
             </span>
-            <p style={{ fontSize: '2rem', fontWeight: 'bold', margin: '0.5rem 0' }}>
-              {progress.streak} days
-            </p>
-            <p style={{ color: 'var(--ifm-font-color-secondary)' }}>
-              {progress.streak > 0 ? 'Keep up the great work!' : 'Start learning today!'}
-            </p>
+            <div>
+              <p style={{ margin: 0, fontSize: '1.5rem', fontWeight: 'bold' }}>
+                {progress.streak} Day Streak
+              </p>
+              <p style={{ margin: 0, opacity: 0.9 }}>
+                {progress.streak > 0 ? 'Keep up the great work!' : 'Start your streak today!'}
+              </p>
+            </div>
           </div>
+          {studySchedule && (
+            <div style={{
+              background: 'rgba(255,255,255,0.2)',
+              padding: '0.75rem 1.25rem',
+              borderRadius: '8px',
+              textAlign: 'center'
+            }}>
+              <p style={{ margin: 0, fontSize: '0.85rem', opacity: 0.9 }}>Next session</p>
+              <p style={{ margin: 0, fontWeight: 'bold' }}>
+                {studySchedule.hoursPerDay}h today
+              </p>
+            </div>
+          )}
         </div>
       </section>
 
@@ -400,10 +645,33 @@ function DashboardContent(): JSX.Element {
           padding: '1.5rem',
           boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
         }}>
-          <ul style={{ margin: 0, paddingLeft: '1.5rem' }}>
-            {progress.recommendations.map((rec, index) => (
-              <li key={index} style={{ marginBottom: '0.75rem' }}>
-                {rec}
+          <ul style={{ margin: 0, paddingLeft: '0', listStyle: 'none' }}>
+            {getPersonalizedRecommendations(profile, progress, studySchedule).map((rec, index) => (
+              <li key={index} style={{
+                marginBottom: '0.75rem',
+                padding: '0.75rem 1rem',
+                background: 'var(--ifm-background-surface-color)',
+                borderRadius: '8px',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '0.75rem'
+              }}>
+                <span style={{
+                  background: 'var(--ifm-color-primary)',
+                  color: 'white',
+                  borderRadius: '50%',
+                  width: '24px',
+                  height: '24px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '0.75rem',
+                  fontWeight: 'bold',
+                  flexShrink: 0
+                }}>
+                  {index + 1}
+                </span>
+                <span>{rec}</span>
               </li>
             ))}
           </ul>
