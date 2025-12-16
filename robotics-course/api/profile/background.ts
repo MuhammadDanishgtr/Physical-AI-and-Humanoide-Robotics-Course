@@ -4,8 +4,7 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { connectToDatabase } from '../lib/mongodb';
-import { ObjectId } from 'mongodb';
+import { MongoClient, ObjectId } from 'mongodb';
 
 interface BackgroundProfile {
   userId: string;
@@ -55,8 +54,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).end();
   }
 
+  const MONGODB_URI = process.env.MONGODB_URI;
+  if (!MONGODB_URI) {
+    return res.status(500).json({ error: 'Database not configured' });
+  }
+
+  let client: MongoClient | null = null;
+
   try {
-    const { db } = await connectToDatabase();
+    client = new MongoClient(MONGODB_URI);
+    await client.connect();
+    const db = client.db('robotics-course');
     const user = await getUserFromToken(req.headers.authorization, db);
 
     // For POST requests during signup, allow saving without strict auth
@@ -121,5 +129,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch (error) {
     console.error('Profile API error:', error);
     return res.status(500).json({ error: 'Internal server error' });
+  } finally {
+    if (client) {
+      await client.close();
+    }
   }
 }
