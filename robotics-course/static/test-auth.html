@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>API Test Page</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 600px;
+      margin: 50px auto;
+      padding: 20px;
+    }
+    .card {
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    h2 { margin-top: 0; }
+    input, button, textarea {
+      display: block;
+      width: 100%;
+      padding: 10px;
+      margin: 10px 0;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      box-sizing: border-box;
+    }
+    button {
+      background: #2563eb;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    button:hover { background: #1d4ed8; }
+    pre {
+      background: #f5f5f5;
+      padding: 15px;
+      border-radius: 4px;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+    .success { color: green; }
+    .error { color: red; }
+  </style>
+</head>
+<body>
+  <h1>API Test Page</h1>
+
+  <div class="card">
+    <h2>Test Chat API</h2>
+    <input type="text" id="chatMessage" placeholder="Your message" value="What is machine learning?">
+    <button onclick="testChat()">Test Chat API (/api/chat)</button>
+    <button onclick="testChatTest()">Test Chat-Test API (/api/chat-test)</button>
+  </div>
+
+  <div class="card">
+    <h2>Test Auth API</h2>
+    <input type="text" id="name" placeholder="Full Name" value="Test User">
+    <input type="email" id="email" placeholder="Email" value="test@example.com">
+    <input type="password" id="password" placeholder="Password" value="test123456">
+    <button onclick="testSignup()">Test Signup API</button>
+  </div>
+
+  <div class="card">
+    <h2>Result:</h2>
+    <pre id="result">Click a button to test...</pre>
+  </div>
+
+  <script>
+    const resultEl = document.getElementById('result');
+
+    function showResult(data, isError = false) {
+      resultEl.textContent = JSON.stringify(data, null, 2);
+      resultEl.className = isError ? 'error' : 'success';
+    }
+
+    async function testChat() {
+      const message = document.getElementById('chatMessage').value;
+      resultEl.textContent = 'Testing /api/chat...';
+
+      try {
+        const response = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message, sessionId: 'test-session' })
+        });
+        const data = await response.json();
+        showResult({ status: response.status, data }, !response.ok);
+      } catch (error) {
+        showResult({ error: error.message }, true);
+      }
+    }
+
+    async function testChatTest() {
+      const message = document.getElementById('chatMessage').value;
+      resultEl.textContent = 'Testing /api/chat-test...';
+
+      try {
+        const response = await fetch('/api/chat-test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message })
+        });
+        const data = await response.json();
+        showResult({ status: response.status, data }, !response.ok);
+      } catch (error) {
+        showResult({ error: error.message }, true);
+      }
+    }
+
+    async function testSignup() {
+      const name = document.getElementById('name').value;
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+
+      resultEl.textContent = 'Testing /api/auth/signup...';
+
+      try {
+        const response = await fetch('/api/auth/signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, email, password })
+        });
+        const data = await response.json();
+        showResult({ status: response.status, data }, !response.ok);
+      } catch (error) {
+        showResult({ error: error.message }, true);
+      }
+    }
+  </script>
+</body>
+</html>
